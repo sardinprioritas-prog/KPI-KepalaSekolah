@@ -1,13 +1,24 @@
-import { MOCK_LEADERBOARD } from '../../services/mockData';
-import { Download } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { getLeaderboard } from '../../services/profileService';
+import { Download, Loader2 } from 'lucide-react';
 import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
 
 export default function RecommendationReport() {
+  const [leaderboard, setLeaderboard] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      const { data } = await getLeaderboard();
+      setLeaderboard(data || []);
+      setLoading(false);
+    };
+    fetchData();
+  }, []);
+
   const downloadPDF = async () => {
     const doc = new jsPDF('p', 'mm', 'a4');
     
-    // Simulate generation for demo
     doc.setFontSize(18);
     doc.text("SURAT REKOMENDASI KINERJA KEPALA SEKOLAH", 105, 20, { align: "center" });
     doc.setFontSize(12);
@@ -16,14 +27,24 @@ export default function RecommendationReport() {
     doc.setFontSize(10);
     let yPos = 50;
     
-    MOCK_LEADERBOARD.sort((a,b) => b.score - a.score).forEach((user, idx) => {
+    leaderboard.forEach((user, idx) => {
       let status = user.score >= 85 ? 'Dipertahankan' : user.score >= 65 ? 'Dievaluasi' : 'Pergantian';
-      doc.text(`${idx + 1}. ${user.name} (${user.school}) - Skor: ${user.score} -> Rekomendasi: ${status}`, 20, yPos);
+      doc.text(`${idx + 1}. ${user.full_name} (${user.school_name}) - Skor: ${user.score} -> Rekomendasi: ${status}`, 20, yPos);
       yPos += 10;
     });
 
     doc.save("Rekomendasi_Kinerja_Kepsek.pdf");
   };
+
+  if (loading) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 300, gap: 12, color: 'var(--text-muted)' }}>
+        <Loader2 size={24} style={{ animation: 'spin 0.8s linear infinite' }} />
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+        Memuat data...
+      </div>
+    );
+  }
 
   return (
     <div className="animate-fade-in">
@@ -32,7 +53,7 @@ export default function RecommendationReport() {
           <h1 style={{ fontSize: '28px', marginBottom: '8px' }}>Cetak Rekomendasi</h1>
           <p className="text-muted">Generate laporan resmi hasil akhir perhitungan KPI semester ini.</p>
         </div>
-        <button onClick={downloadPDF} className="btn btn-primary">
+        <button onClick={downloadPDF} className="btn btn-purple">
           <Download size={18} />
           Unduh Laporan (PDF)
         </button>
@@ -53,20 +74,20 @@ export default function RecommendationReport() {
           <thead>
             <tr>
               <th style={{ border: '1px solid black', padding: '8px' }}>No</th>
-              <th style={{ border: '1px solid black', padding: '8px' }}>Nama / NIP</th>
+              <th style={{ border: '1px solid black', padding: '8px' }}>Nama</th>
               <th style={{ border: '1px solid black', padding: '8px' }}>Sekolah</th>
               <th style={{ border: '1px solid black', padding: '8px' }}>Skor KPI</th>
               <th style={{ border: '1px solid black', padding: '8px' }}>Rekomendasi Tindak Lanjut</th>
             </tr>
           </thead>
           <tbody>
-            {MOCK_LEADERBOARD.sort((a,b) => b.score - a.score).map((user, idx) => {
+            {leaderboard.map((user, idx) => {
               let status = user.score >= 85 ? 'Dipertahankan' : user.score >= 65 ? 'Dievaluasi Kembali (Coaching)' : 'Dipertimbangkan Pergantian';
               return (
                 <tr key={user.id}>
                   <td style={{ border: '1px solid black', padding: '8px', textAlign: 'center' }}>{idx + 1}</td>
-                  <td style={{ border: '1px solid black', padding: '8px' }}>{user.name}</td>
-                  <td style={{ border: '1px solid black', padding: '8px' }}>{user.school}</td>
+                  <td style={{ border: '1px solid black', padding: '8px' }}>{user.full_name}</td>
+                  <td style={{ border: '1px solid black', padding: '8px' }}>{user.school_name || '—'}</td>
                   <td style={{ border: '1px solid black', padding: '8px', textAlign: 'center', fontWeight: 'bold' }}>{user.score}</td>
                   <td style={{ border: '1px solid black', padding: '8px' }}>{status}</td>
                 </tr>
