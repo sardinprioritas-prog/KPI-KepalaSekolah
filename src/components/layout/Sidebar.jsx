@@ -3,6 +3,7 @@ import {
   School, LayoutDashboard, FileText, BarChart3,
   CheckSquare, LogOut, Award, ShieldCheck, GraduationCap
 } from 'lucide-react';
+import { supabase } from '../../services/supabase';
 
 const ROLE_CONFIG = {
   kepsek: {
@@ -43,8 +44,8 @@ export default function Sidebar({ role }) {
   const config = ROLE_CONFIG[role] || ROLE_CONFIG.kepsek;
   const RoleIcon = config.Icon;
 
-  const handleLogout = () => {
-    localStorage.removeItem('user');
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
     navigate('/auth');
   };
 

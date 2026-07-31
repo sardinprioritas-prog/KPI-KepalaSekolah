@@ -1,47 +1,88 @@
-import { Outlet, Navigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { Outlet, Navigate, useNavigate } from 'react-router-dom';
 import Sidebar from './Sidebar';
+import { supabase } from '../../services/supabase';
 
 const ROLE_CONFIG = {
   kepsek: {
     label: 'Kepala Sekolah',
-    sublabel: 'Cabdis Wilayah III Bone',
     avatarGradient: 'linear-gradient(135deg, #6366f1, #818cf8)',
     initial: 'K',
-    titleColor: '#818cf8',
   },
   verifikator: {
     label: 'Pengawas / Verifikator',
-    sublabel: 'Cabdis Wilayah III Bone',
     avatarGradient: 'linear-gradient(135deg, #10b981, #34d399)',
     initial: 'V',
-    titleColor: '#34d399',
   },
   eksekutif: {
     label: 'Kepala Dinas',
-    sublabel: 'Dinas Pendidikan Prov. Sulsel',
     avatarGradient: 'linear-gradient(135deg, #a855f7, #c084fc)',
     initial: 'E',
-    titleColor: '#c084fc',
   },
 };
 
 export default function AppLayout({ allowedRole }) {
-  const userStr = localStorage.getItem('user');
+  const navigate = useNavigate();
+  const [profile, setProfile] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-  if (!userStr) return <Navigate to="/auth" />;
+  useEffect(() => {
+    const init = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { navigate('/auth'); return; }
 
-  const user = JSON.parse(userStr);
+      const { data: prof } = await supabase
+        .from('profiles')
+        .select('*, schools(*)')
+        .eq('id', user.id)
+        .single();
 
-  if (allowedRole && user.role !== allowedRole) return <Navigate to="/auth" />;
+      if (!prof || (allowedRole && prof.role !== allowedRole)) {
+        await supabase.auth.signOut();
+        navigate('/auth');
+        return;
+      }
 
-  const config = ROLE_CONFIG[user.role] || ROLE_CONFIG.kepsek;
+      setProfile(prof);
+      setLoading(false);
+    };
+
+    init();
+
+    // Listen untuk perubahan auth state
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_OUT') navigate('/auth');
+    });
+
+    return () => subscription.unsubscribe();
+  }, [allowedRole, navigate]);
+
+  if (loading) {
+    return (
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        minHeight: '100vh', flexDirection: 'column', gap: 16
+      }}>
+        <div style={{
+          width: 40, height: 40, borderRadius: '50%',
+          border: '3px solid rgba(99,102,241,0.2)',
+          borderTopColor: '#6366f1',
+          animation: 'spin 0.8s linear infinite'
+        }} />
+        <span style={{ color: 'var(--text-muted)', fontSize: 14 }}>Memuat...</span>
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      </div>
+    );
+  }
+
+  const config = ROLE_CONFIG[profile?.role] || ROLE_CONFIG.kepsek;
+  const schoolName = profile?.schools?.name || 'Cabdis Wilayah III Bone';
 
   return (
     <div className="app-container">
-      <Sidebar role={user.role} />
+      <Sidebar role={profile?.role} />
 
       <main className="main-content">
-        {/* Topbar */}
         <header className="topbar">
           <div>
             <div className="topbar-title">Selamat datang kembali,</div>
@@ -54,29 +95,23 @@ export default function AppLayout({ allowedRole }) {
                 backgroundClip: 'text',
               }}
             >
-              {config.label}
+              {profile?.full_name || config.label}
             </div>
           </div>
 
           <div className="user-profile">
             <div style={{ textAlign: 'right' }}>
-              <div style={{ fontWeight: 600, fontSize: 14 }}>Demo User</div>
-              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                {config.sublabel}
-              </div>
+              <div style={{ fontWeight: 600, fontSize: 14 }}>{config.label}</div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{schoolName}</div>
             </div>
-            <div
-              className="avatar"
-              style={{ background: config.avatarGradient }}
-            >
-              {config.initial}
+            <div className="avatar" style={{ background: config.avatarGradient }}>
+              {(profile?.full_name?.[0] || config.initial).toUpperCase()}
             </div>
           </div>
         </header>
 
-        {/* Page Content */}
         <div className="animate-fade-in">
-          <Outlet />
+          <Outlet context={{ profile }} />
         </div>
       </main>
     </div>

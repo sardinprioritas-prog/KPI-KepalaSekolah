@@ -1,30 +1,57 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PILLARS } from '../../services/mockData';
-import { UploadCloud, CheckCircle } from 'lucide-react';
+import { submitLogbook } from '../../services/logbookService';
+import { UploadCloud, CheckCircle, AlertCircle } from 'lucide-react';
 
 export default function WeeklyLogbookForm() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [error, setError] = useState('');
 
-  const handleSubmit = (e) => {
+  const [form, setForm] = useState({
+    week_number: new Date().getDay() === 0
+      ? Math.ceil(new Date().getDate() / 7)
+      : Math.ceil(new Date().getDate() / 7),
+    pillar_id: '',
+    description: '',
+    evidence_url: '',
+  });
+
+  const handleChange = (e) => {
+    setForm(prev => ({ ...prev, [e.target.name]: e.target.value }));
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
-    // Simulate API call
-    setTimeout(() => {
+    setError('');
+
+    const { error: submitError } = await submitLogbook({
+      pillar_id: Number(form.pillar_id),
+      week_number: Number(form.week_number),
+      year: new Date().getFullYear(),
+      description: form.description,
+      evidence_url: form.evidence_url,
+    });
+
+    if (submitError) {
+      setError(submitError.message || 'Gagal mengirim laporan. Coba lagi.');
       setLoading(false);
-      setSuccess(true);
-      setTimeout(() => navigate('/kepsek'), 2000);
-    }, 1500);
+      return;
+    }
+
+    setSuccess(true);
+    setTimeout(() => navigate('/kepsek'), 2000);
   };
 
   if (success) {
     return (
-      <div className="glass-panel text-center animate-fade-in" style={{ padding: '60px 20px' }}>
-        <CheckCircle size={64} color="var(--success)" style={{ margin: '0 auto 24px' }} />
+      <div className="glass-panel text-center animate-fade-in" style={{ padding: '60px 20px', maxWidth: 500, margin: '0 auto' }}>
+        <CheckCircle size={64} color="#34d399" style={{ margin: '0 auto 24px' }} />
         <h2 style={{ fontSize: '24px', marginBottom: '8px' }}>Laporan Berhasil Dikirim!</h2>
-        <p className="text-muted">Laporan mingguan Anda telah masuk ke antrean verifikasi Cabdis.</p>
+        <p style={{ color: 'var(--text-muted)' }}>Logbook Anda telah masuk ke antrean verifikasi Cabdis.</p>
       </div>
     );
   }
@@ -33,57 +60,103 @@ export default function WeeklyLogbookForm() {
     <div className="animate-fade-in">
       <div className="mb-8">
         <h1 style={{ fontSize: '28px', marginBottom: '8px' }}>Isi Logbook Mingguan</h1>
-        <p className="text-muted">Pilih pilar kebijakan dan laporkan aktivitas Anda minggu ini.</p>
+        <p style={{ color: 'var(--text-muted)' }}>Pilih pilar kebijakan dan laporkan aktivitas Anda minggu ini.</p>
       </div>
 
       <div className="glass-panel" style={{ maxWidth: '800px' }}>
+        {error && (
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 10,
+            background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)',
+            borderRadius: 10, padding: '12px 14px', marginBottom: 24, fontSize: 13, color: '#f87171'
+          }}>
+            <AlertCircle size={16} />
+            {error}
+          </div>
+        )}
+
         <form onSubmit={handleSubmit}>
-          <div className="form-group">
-            <label className="form-label">Minggu Ke-</label>
-            <input type="number" className="form-control" defaultValue={3} required />
+          <div className="grid grid-cols-2 mb-4" style={{ gap: 16 }}>
+            <div className="form-group" style={{ margin: 0 }}>
+              <label className="form-label">Minggu Ke-</label>
+              <input
+                type="number"
+                name="week_number"
+                className="form-control focus-indigo"
+                value={form.week_number}
+                onChange={handleChange}
+                min={1} max={52}
+                required
+              />
+            </div>
+            <div className="form-group" style={{ margin: 0 }}>
+              <label className="form-label">Tahun</label>
+              <input
+                type="number"
+                className="form-control focus-indigo"
+                defaultValue={new Date().getFullYear()}
+                readOnly
+                style={{ opacity: 0.7, cursor: 'not-allowed' }}
+              />
+            </div>
           </div>
 
           <div className="form-group">
             <label className="form-label">Pilar Kebijakan</label>
-            <select className="form-control" required style={{ cursor: 'pointer' }}>
+            <select
+              name="pillar_id"
+              className="form-control focus-indigo"
+              value={form.pillar_id}
+              onChange={handleChange}
+              required
+              style={{ cursor: 'pointer' }}
+            >
               <option value="">-- Pilih Pilar Kebijakan --</option>
               {PILLARS.map(p => (
-                <option key={p.id} value={p.id}>{p.id}. {p.name}</option>
+                <option key={p.id} value={p.id}>
+                  {p.id}. {p.name} (Bobot: {p.weight}%)
+                </option>
               ))}
             </select>
           </div>
 
           <div className="form-group">
             <label className="form-label">Deskripsi Kegiatan</label>
-            <textarea 
-              className="form-control" 
-              rows={4} 
+            <textarea
+              name="description"
+              className="form-control focus-indigo"
+              rows={4}
               placeholder="Jelaskan secara singkat kegiatan yang telah dilakukan..."
+              value={form.description}
+              onChange={handleChange}
               required
-            ></textarea>
+            />
           </div>
 
           <div className="form-group mb-8">
-            <label className="form-label">Bukti Fisik (URL Dokumen / Foto / Google Drive)</label>
+            <label className="form-label">Bukti Fisik (URL Dokumen / Google Drive)</label>
             <div className="flex items-center gap-4">
-              <input 
-                type="url" 
-                className="form-control" 
-                placeholder="https://drive.google.com/..." 
-                required 
+              <input
+                type="url"
+                name="evidence_url"
+                className="form-control focus-indigo"
+                placeholder="https://drive.google.com/file/d/..."
+                value={form.evidence_url}
+                onChange={handleChange}
+                required
               />
               <button type="button" className="btn btn-secondary flex items-center gap-2" style={{ whiteSpace: 'nowrap' }}>
                 <UploadCloud size={18} />
-                Atau Upload
+                Upload
               </button>
             </div>
           </div>
 
           <div className="flex justify-between items-center">
-            <button type="button" className="btn btn-secondary" onClick={() => navigate('/kepsek')}>
+            <button type="button" className="btn btn-ghost" onClick={() => navigate('/kepsek')}>
               Batal
             </button>
-            <button type="submit" className="btn btn-primary" disabled={loading}>
+            <button type="submit" className="btn btn-indigo" disabled={loading}>
               {loading ? 'Mengirim...' : 'Kirim Laporan'}
             </button>
           </div>
